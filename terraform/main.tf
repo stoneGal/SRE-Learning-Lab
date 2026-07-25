@@ -11,18 +11,18 @@ terraform {
 
 
 provider "aws" {              # configures the AWS plugin
-  region = "eu-central-1"    # all resources created in Frankfurt
+  region = var.aws_region    # all resources created in Frankfurt
 }
 
 resource "aws_vpc" "sre_lab" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = {
     Name        = "sre-lab-vpc-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
 
@@ -36,8 +36,8 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name        = "sre-public-subnet-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
 
@@ -48,8 +48,8 @@ resource "aws_subnet" "private" {
 
   tags = {
     Name        = "sre-private-subnet-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
 
@@ -59,8 +59,8 @@ resource "aws_internet_gateway" "sre_igw" {
 
   tags = {
     Name        = "sre-igw-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
 
@@ -74,8 +74,8 @@ resource "aws_route_table" "public" {
 
   tags = {
     Name        = "sre-public-rt-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
 
@@ -83,10 +83,6 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
-
-
-
-
 
 
 
@@ -129,30 +125,25 @@ resource "aws_security_group" "web" {
 
   tags = {
     Name        = "sre-web-sg-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
-
-
-
-
-
-
 
 
 
 
 resource "aws_instance" "web" {
   ami                    = "ami-042dc8681de073ac4"
-  instance_type          = "t3.micro"
+  instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web.id]
   key_name               = "sre-lab-key"
 
   tags = {
     Name        = "sre-lab-server-terraform"
-    Environment = "learning"
-    Owner       = "bethel"
+    Environment = var.environment
+    Owner       = var.owner
   }
 }
+
