@@ -132,7 +132,6 @@ resource "aws_security_group" "web" {
 
 
 
-
 resource "aws_instance" "web" {
   ami                    = "ami-042dc8681de073ac4"
   instance_type          = var.instance_type
@@ -140,8 +139,39 @@ resource "aws_instance" "web" {
   vpc_security_group_ids = [aws_security_group.web.id]
   key_name               = "sre-lab-key"
 
+  user_data = <<-EOF
+    #!/bin/bash
+    apt update -y
+    apt install -y htop curl wget net-tools dnsutils sysstat tree vim
+    fallocate -l 2G /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    mkdir -p /etc/systemd/journald.conf.d
+    cat > /etc/systemd/journald.conf.d/size.conf << 'JOURNAL'
+    [Journal]
+    SystemMaxUse=200M
+    SystemKeepFree=500M
+    MaxRetentionSec=7day
+    JOURNAL
+    systemctl restart systemd-journald
+  EOF
+
   tags = {
     Name        = "sre-lab-server-terraform"
+    Environment = var.environment
+    Owner       = var.owner
+  }
+}
+
+
+resource "aws_eip" "web" {
+  instance = aws_instance.web.id
+  domain   = "vpc"
+
+  tags = {
+    Name        = "sre-lab-eip"
     Environment = var.environment
     Owner       = var.owner
   }
