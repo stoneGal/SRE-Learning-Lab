@@ -1,7 +1,7 @@
 #!/bin/bash
 echo "Stopping sre-lab-server..."
 aws ec2 stop-instances \
-  --instance-ids i-0f6fd2ae096b49294 \
+  --instance-ids i-02eb8f305293707ba \
   --region eu-central-1 \
   --output text
 echo "Server stopped."
