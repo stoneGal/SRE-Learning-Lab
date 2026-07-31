@@ -1,8 +1,15 @@
 terraform {
-  required_providers {        # tells Terraform which plugins to download
+  backend "s3" {
+    bucket  = "sre-lab-terraform-state-bethel"
+    key     = "aws-lab/terraform.tfstate"
+    region  = "eu-central-1"
+    encrypt = true
+  }
+
+  required_providers {
     aws = {
-      source  = "hashicorp/aws"  # official AWS plugin from HashiCorp
-      version = "~> 5.0"         # use version 5.x (~ means flexible patch)
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 }
