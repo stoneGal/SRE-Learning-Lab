@@ -1,9 +1,10 @@
 terraform {
   backend "s3" {
-    bucket  = "sre-lab-terraform-state-bethel"
-    key     = "aws-lab/terraform.tfstate"
-    region  = "eu-central-1"
-    encrypt = true
+    bucket         = "sre-lab-terraform-state-bethel"
+    key            = "aws-lab/terraform.tfstate"
+    region         = "eu-central-1"
+    encrypt        = true
+    dynamodb_table = "sre-lab-terraform-locks"
   }
 
   required_providers {
@@ -17,8 +18,8 @@ terraform {
 
 
 
-provider "aws" {              # configures the AWS plugin
-  region = var.aws_region    # all resources created in Frankfurt
+provider "aws" {          # configures the AWS plugin
+  region = var.aws_region # all resources created in Frankfurt
 }
 
 resource "aws_vpc" "sre_lab" {
@@ -121,14 +122,14 @@ resource "aws_security_group" "web" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["95.91.244.102/32"]
   }
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    description     = "HTTP"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
 
@@ -137,7 +138,7 @@ resource "aws_security_group" "web" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["95.91.244.102/32"]
   }
 
   egress {
@@ -207,7 +208,7 @@ resource "aws_security_group" "alb" {
   description = "Security group for SRE lab ALB"
   vpc_id      = aws_vpc.sre_lab.id
 
-  
+
   ingress {
     description = "HTTP"
     from_port   = 80
@@ -261,7 +262,7 @@ data "aws_route53_zone" "main" {
 resource "aws_acm_certificate" "web" {
   domain_name               = "bethel-sre-lab.online"
   subject_alternative_names = ["*.bethel-sre-lab.online"]
-  validation_method          = "DNS"
+  validation_method         = "DNS"
 
   lifecycle {
     create_before_destroy = true
@@ -357,7 +358,22 @@ resource "aws_lb_target_group_attachment" "web" {
 
 
 
+resource "aws_dynamodb_table" "terraform_locks" {
+  name         = "sre-lab-terraform-locks"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
 
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "sre-lab-terraform-locks"
+    Environment = var.environment
+    Owner       = var.owner
+  }
+}
 
 
 
