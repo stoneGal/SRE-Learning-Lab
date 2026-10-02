@@ -1,0 +1,19 @@
+---
+- name: Install nginx
+  apt:
+    name: nginx
+    state: present
+    update_cache: yes
+- name: Ensure nginx is running
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+- name: Deploy templated index page
+  template:
+    src: index.html.j2
+    dest: /var/www/html/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+    notify: Restart nginx

@@ -1,0 +1,5 @@
+- name: Install Docker on the web servers
+  hosts: web_servers
+  become: yes
+  roles:
+    - docker
