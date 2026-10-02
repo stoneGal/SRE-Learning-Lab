@@ -22,6 +22,32 @@ provider "aws" {          # configures the AWS plugin
   region = var.aws_region # all resources created in Frankfurt
 }
 
+resource "aws_iam_role" "ec2_ecr_pull" {
+  name = "sre-lab-ec2-ecr-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ecr_pull_attach" {
+  role       = aws_iam_role.ec2_ecr_pull.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_instance_profile" "ec2_ecr_pull_profile" {
+  name = "sre-lab-ec2-ecr-profile"
+  role = aws_iam_role.ec2_ecr_pull.name
+}
+
+
 resource "aws_vpc" "sre_lab" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -122,13 +148,21 @@ resource "aws_security_group" "web" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["95.91.244.102/32"]
+    cidr_blocks = ["95.91.213.49/32"]
   }
 
   ingress {
     description     = "HTTP"
     from_port       = 80
     to_port         = 80
+    protocol        = "tcp"
+security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Container HTTP"
+    from_port       = 8080
+    to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -138,7 +172,7 @@ resource "aws_security_group" "web" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["95.91.244.102/32"]
+    cidr_blocks = ["95.91.213.49/32"]
   }
 
   egress {
@@ -158,11 +192,18 @@ resource "aws_security_group" "web" {
 
 
 resource "aws_instance" "web" {
+
+  root_block_device {
+  volume_size = 20
+  volume_type = "gp3"
+}
+
   ami                    = "ami-042dc8681de073ac4"
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web.id]
   key_name               = "sre-lab-key"
+  iam_instance_profile = aws_iam_instance_profile.ec2_ecr_pull_profile.name
 
   user_data = <<-EOF
     #!/bin/bash
@@ -353,7 +394,7 @@ resource "aws_lb_listener" "web_https" {
 resource "aws_lb_target_group_attachment" "web" {
   target_group_arn = aws_lb_target_group.web.arn
   target_id        = aws_instance.web.id
-  port             = 80
+  port             = 8080
 }
 
 
@@ -372,6 +413,15 @@ resource "aws_dynamodb_table" "terraform_locks" {
     Name        = "sre-lab-terraform-locks"
     Environment = var.environment
     Owner       = var.owner
+  }
+}
+
+resource "aws_ecr_repository" "my_nginx_site" {
+  name                 = "my-nginx-site"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
   }
 }
 
