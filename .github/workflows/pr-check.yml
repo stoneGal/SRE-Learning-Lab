@@ -1,0 +1,38 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docker/**'
+      - 'deploy/**'
+      - '.github/workflows/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check deploy script syntax
+        run: bash -n deploy/deploy.sh
+
+      - name: Build image (no push)
+        run: docker build -t pr-test ./docker
+
+      - name: Start container
+        run: docker run -d --name pr-test -p 8080:80 pr-test
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS -o /dev/null http://localhost:8080/; then
+              echo "Container is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container never became healthy"
+          docker logs pr-test
+          exit 1
