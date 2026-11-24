@@ -28,8 +28,8 @@ resource "aws_iam_role" "ec2_ecr_pull" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
       Principal = {
         Service = "ec2.amazonaws.com"
       }
@@ -156,7 +156,7 @@ resource "aws_security_group" "web" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-security_groups = [aws_security_group.alb.id]
+    security_groups = [aws_security_group.alb.id]
   }
 
   ingress {
@@ -194,16 +194,16 @@ security_groups = [aws_security_group.alb.id]
 resource "aws_instance" "web" {
 
   root_block_device {
-  volume_size = 20
-  volume_type = "gp3"
-}
+    volume_size = 20
+    volume_type = "gp3"
+  }
 
   ami                    = "ami-042dc8681de073ac4"
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web.id]
   key_name               = "sre-lab-key"
-  iam_instance_profile = aws_iam_instance_profile.ec2_ecr_pull_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_ecr_pull_profile.name
 
   user_data = <<-EOF
     #!/bin/bash
@@ -426,5 +426,120 @@ resource "aws_ecr_repository" "my_nginx_site" {
 }
 
 
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["ffffffffffffffffffffffffffffffffffffffff"]
+}
+
+resource "aws_iam_role" "github_actions" {
+  name = "sre-lab-github-actions-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github.arn
+      }
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:stoneGal/SRE-Learning-Lab:*"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+}
 
 
+
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
+  role       = aws_iam_role.ec2_ecr_pull.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "github_actions_ssm_deploy" {
+  name = "sre-lab-github-actions-ssm-deploy"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "ssm:SendCommand"
+        Resource = [
+          aws_instance.web.arn,
+          "arn:aws:ssm:eu-central-1::document/AWS-RunShellScript"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_security_group" "k3s" {
+  name        = "sre-lab-k3s-sg"
+  description = "Security group for k3s practice server"
+  vpc_id      = aws_vpc.sre_lab.id
+
+  ingress {
+    description = "SSH from my IP"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["95.91.213.49/32"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "sre-lab-k3s-sg"
+    Environment = var.environment
+    Owner       = var.owner
+  }
+}
+
+resource "aws_instance" "k3s" {
+  ami                         = "ami-042dc8681de073ac4"
+  instance_type               = "c7i-flex.large"
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.k3s.id]
+  key_name                    = "sre-lab-key"
+  iam_instance_profile        = aws_iam_instance_profile.ec2_ecr_pull_profile.name
+  associate_public_ip_address = true
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
+
+  tags = {
+    Name        = "sre-lab-k3s"
+    Environment = var.environment
+    Owner       = var.owner
+  }
+}
+
+output "k3s_public_ip" {
+  value = aws_instance.k3s.public_ip
+}
